@@ -26,6 +26,11 @@ type MSG struct {
 	Poster   string //海报URL
 	Type     string //资源类型
 	Response string //回复是否成功 true
+	ImdbID   string //信息的唯一id，作为数据库的操作条件
+}
+
+func (msg *MSG) string() string {
+	return msg.Title
 }
 
 var movieMsg MSG
@@ -63,7 +68,13 @@ func main() {
 	check(err)
 
 	//----------------------将拿到的json数据存入数据库中-----------------------------------------TODO
-
+	//首先查询对应的id在数据库中是否存在，不存在才插入数据
+	flag := findMsg(movieMsg.ImdbID)
+	if !flag {
+		insertData(movieMsg)
+	}
+	//updateMsg(movieMsg)
+	//deleteMsg(movieMsg.ImdbID)
 }
 
 //检查是否出错，出错就panic
@@ -87,6 +98,13 @@ func tip() {
 		Once Upon A Time in America《美国往事》
 `)
 }
+
+/*
+insert movie.info set title="hehe",year="2012",runtime="120",actors="zs"
+select * from movie.info
+update movie.info set title = "haha" where id="2"
+delete from movie.info where id="3"
+*/
 
 /*
 {
