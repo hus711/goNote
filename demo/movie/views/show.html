@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>List</title>
+</head>
+  <body>
+  <h1>图片列表</h1>
+      {{range $.images}}
+      	<img width="30%" height="400" src="/view?id={{.|urlquery}}" />\n
+			{{.|html}}
+      {{end}}
+  </body>
+</html>

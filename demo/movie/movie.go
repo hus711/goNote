@@ -4,14 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	//"io"
+	"html/template"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"path"
+	//"strings"
 )
 
 const (
-	BASE_URL   = "http://www.omdbapi.com"
-	POSTER_DIR = "./posters"
+	BASE_URL     = "http://www.omdbapi.com" //基础数据拉取页面
+	POSTER_DIR   = "./posters"              //海报的保存目录
+	TEMPLATE_DIR = "./views"                //html模板的存放目录
 )
 
 //消息结构
@@ -35,10 +40,152 @@ func (msg *MSG) string() string {
 
 var movieMsg MSG
 var title string = "The+Shawshank+Redemption"
+var templates = make(map[string]*template.Template)
 
-//开放API接口，通过输入title将返回电影数据
+func init() {
+	fileInfoDir, err := ioutil.ReadDir(TEMPLATE_DIR)
+	check(err)
+	var templateName, templatePath string
+
+	for _, fileInfo := range fileInfoDir {
+		//模板名
+		templateName = fileInfo.Name()
+		//只需要.html结尾的文件
+		if ext := path.Ext(templateName); ext != ".html" {
+			continue
+		}
+		//模板路径
+		templatePath = TEMPLATE_DIR + "/" + templateName
+		log.Println("Loading template:", templatePath)
+		//解析模板（must解析出错直接panic）
+		t := template.Must(template.ParseFiles(templatePath))
+		templates[templateName] = t
+	}
+}
+
+//专门用来渲染函数模板
+func renderHtml(w http.ResponseWriter, tmpl string, locals map[string]interface{}) {
+	tmpl += ".html"
+	//拿到对应的模板，然后渲染并且写到浏览器中去
+	err := templates[tmpl].Execute(w, locals)
+	check(err)
+}
+
+//判断路径是否存在
+func isExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	return os.IsExist(err)
+}
+
+//列出所有的上传图片
+func listHandler(w http.ResponseWriter, r *http.Request) {
+	//遍历上传文件夹
+	fileInfoArr, err := ioutil.ReadDir(POSTER_DIR)
+	check(err)
+	locals := make(map[string]interface{})
+	images := []string{}
+	for _, fileInfo := range fileInfoArr {
+		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
+			continue
+		}
+		images = append(images, fileInfo.Name())
+	}
+	locals["images"] = images
+	renderHtml(w, "list", locals)
+}
+
+//显示图片
+func showPictureHandler(w http.ResponseWriter, r *http.Request) {
+	fileInfoArr, err := ioutil.ReadDir(POSTER_DIR)
+	check(err)
+	locals := make(map[string]interface{})
+	images := []string{}
+	for _, fileInfo := range fileInfoArr {
+		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
+			continue
+		}
+		images = append(images, fileInfo.Name())
+	}
+	locals["images"] = images
+	renderHtml(w, "show", locals)
+}
+
+//查看某个图片,没有就不会显示（html中有view?id=...）
+func viewHandler(w http.ResponseWriter, r *http.Request) {
+	//从请求中拿到id对应的信息
+	imageId := r.FormValue("id")
+	//拼接图片相对路径
+	imagePath := POSTER_DIR + "/" + imageId
+	fmt.Println("图片路径：" + imagePath)
+	if ok := isExists(imagePath); !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	//设置回复头信息
+	w.Header().Set("Content-Type", "image")
+	//向服务器发送图片数据
+	http.ServeFile(w, r, imagePath)
+}
+
+//使用闭包防止程序崩溃（闭包：函数和引用环境的组成的整体，函数内部返回函数）
+func safeHandler(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		//延迟执行匿名函数，在每一个业务逻辑调用完毕都会调用这个匿名函数，如果出发了panic则拦截下来
+		defer func() {
+			//使用recover来拦截错误信息
+			if e, ok := recover().(error); ok {
+				http.Error(w, e.Error(), http.StatusInternalServerError)
+
+				// 或者输出自定义的 50x 错误页面
+				// w.WriteHeader(http.StatusInternalServerError)
+				// renderHtml(w, "error", e.Error())
+
+				// logging
+				log.Println("WARN: panic fired in %v.panic - %v", fn, e)
+			}
+		}()
+
+		//执行业务逻辑
+		fn(w, r)
+	}
+}
+
+//TODO:做一个循环输入的命令行程序
+/*
+	1.搜索电影-->显示电影信息 or fail msg
+	2.命令操作拿到的信息（保存、下载海报、数据库CRUD、海报的查看与删除、开启和关闭web服务）
+	3.开启了web服务之后，就可以通过浏览器网页端来访问搜索到的数据
+*/
 func main() {
-	tip()
+	// fmt.Println("welcome")
+	// Help(nil)
+
+	// r := bufio.NewReader(os.Stdin)
+
+	// handlers := GetCommandHandlers()
+
+	// for { // 循环读取用户输入
+	// 	fmt.Print("Command> ")
+	// 	b, _, _ := r.ReadLine()
+	// 	line := string(b)
+
+	// 	tokens := strings.Split(line, " ")
+
+	// 	if handler, ok := handlers[tokens[0]]; ok {
+	// 		ret := handler(tokens)
+	// 		if ret != 0 {
+	// 			break
+	// 		}
+	// 	} else {
+	// 		fmt.Println("Unknown command:", tokens[0])
+	// 	}
+	// }
+
+	help(nil)
 
 	//--------------------拼装URL-----------------------------
 	if len(os.Args) == 2 {
@@ -57,17 +204,24 @@ func main() {
 	json.Unmarshal(msgByte, &movieMsg)
 	fmt.Println(movieMsg)
 
-	//下载URL中海报
-	f, err := http.Get(movieMsg.Poster)
-	t, _ := os.Create(POSTER_DIR + "/" + title + ".jpg")
-	check(err)
-	defer t.Close()
-	b, err := ioutil.ReadAll(f.Body)
-	//复制文件数据到文件流中去
-	_, err = t.Write(b)
-	check(err)
+	//不存在就去下载URL中海报
+	if !isExists(POSTER_DIR + "/" + movieMsg.Title + ".jpg") {
 
-	//----------------------将拿到的json数据存入数据库中-----------------------------------------TODO
+		f, err := http.Get(movieMsg.Poster)
+		//去除标题中的加号
+		//title = strings.Replace(title, "+", " ", -1)
+		t, _ := os.Create(POSTER_DIR + "/" + movieMsg.Title + ".jpg")
+		check(err)
+		defer t.Close()
+		b, err := ioutil.ReadAll(f.Body)
+		//复制文件数据到文件流中去
+		_, err = t.Write(b)
+		check(err)
+	} else {
+		fmt.Println("海报已经存在。。。。")
+	}
+
+	//----------------------将拿到的json数据存入数据库中-----------------------------------------
 	//首先查询对应的id在数据库中是否存在，不存在才插入数据
 	flag := findMsg(movieMsg.ImdbID)
 	if !flag {
@@ -75,6 +229,19 @@ func main() {
 	}
 	//updateMsg(movieMsg)
 	//deleteMsg(movieMsg.ImdbID)
+
+	//-----------------------在网页上展示数据----------------------------------------------------
+
+	//创建一个多路转接器
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", safeHandler(listHandler))
+	mux.HandleFunc("/view", safeHandler(viewHandler))
+	mux.HandleFunc("/show", safeHandler(showPictureHandler))
+	//监听本地8080端口
+	err = http.ListenAndServe(":8080", mux)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err.Error())
+	}
 }
 
 //检查是否出错，出错就panic
@@ -84,19 +251,36 @@ func check(err error) {
 	}
 }
 
-func tip() {
+func help(args []string) int {
 	fmt.Println(`
-	只支持搜索英文电影(空格加号代替):
-    	没有参数默认值：The+Shawshank+Redemption
-    	《教父》The Godfather
-		《肖申克的救赎》The Shawshank Redemption
-		《星球大战》Star Wars
-		《Leon-The Professional 》这个杀手不太冷
-		《Inception》盗梦空间
-		《3 idiots》三傻大闹宝莱坞
-		One Flew the Cuckoo's Nest 《飞越疯人院》
-		Once Upon A Time in America《美国往事》
+	Commands:
+    	sea <movie name>	//搜索电影（only English movie）
+    	lip					//显示所有海报列表
+    	lid					//显示所有数据库信息
+    	dep <num>			//删除海报	
+    	ded <imid>			//删除数据库对应的电影信息
+    	deap				//删除所有海报
+    	dead				//删除所有数据库数据
+    	starts				//开启web服务
+    	stops				//关闭web服务
+    	save				//保存搜索到的信息到数据库
+    	q					//关闭程序
+    	h					//帮助信息
 `)
+	fmt.Println(`
+--------------------------------------------------
+	示例：
+       	1.The Shawshank Redemption 肖申克的救赎
+       	2.The Godfather 教父
+       	3.Star Wars 星球大战
+       	4.Leon-The Professional 这个杀手不太冷
+       	5.Inception 盗梦空间
+       	6.3 idiots 三傻大闹宝莱坞
+       	7.One Flew the Cuckoo's Nest  飞越疯人院
+       	8.Once Upon A Time in America 美国往事
+`)
+
+	return 0
 }
 
 /*

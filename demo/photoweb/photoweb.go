@@ -115,7 +115,7 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	locals := make(map[string]interface{})
 	images := []string{}
 	for _, fileInfo := range fileInfoArr {
-		if fileInfo.Name() == ".DS_Store" {
+		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
 			continue
 		}
 		images = append(images, fileInfo.Name())
@@ -131,7 +131,7 @@ func showPictureHandler(w http.ResponseWriter, r *http.Request) {
 	locals := make(map[string]interface{})
 	images := []string{}
 	for _, fileInfo := range fileInfoArr {
-		if fileInfo.Name() == ".DS_Store" {
+		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
 			continue
 		}
 		images = append(images, fileInfo.Name())
