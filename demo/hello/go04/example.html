@@ -6,9 +6,11 @@
 </head>
   <body>
   <h1>图片列表</h1>
-      {%for item in items%}
-      	<img width="30%" height="400" src="/view?id={{item}}" />
-		{{item}}
-      {%endfor%}
+  <ol>
+  {%for item in items%}
+  	   <li><a href="/view?id={{item}}">{{item}}</a></li>
+  {%endfor%}
+   
+  </ol>
   </body>
 </html>

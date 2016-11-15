@@ -6,9 +6,9 @@
 </head>
   <body>
     <ol>
-      {{range $.images}}
-      <li><a href="/view?id={{.|urlquery}}">{{.|html}}</a></li>
-      {{end}}
+     {%for item in items%}
+     	 <li><a href="/view?id={{item}}">{{item}}</a></li>
+     {%endfor%}
     </ol>
   </body>
 </html>

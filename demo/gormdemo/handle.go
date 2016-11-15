@@ -183,9 +183,10 @@ func query(args []string) int {
 		db.Last(&person1)
 		fmt.Println("查询最后一个的名字：" + person1.Name)
 
-		person2 := &Person{}
-		db.Where("name = ?", "hs0").First(&person2)
-		fmt.Println("条件查询第一个name=hs0的： ", person2)
+		fmt.Println("---------所有数据-----------------")
+		persons := make([]Person, 100)
+		db.Find(&persons)
+		//fmt.Println(persons)
 	default:
 		fmt.Println("表模型不存在，请重新输入")
 	}

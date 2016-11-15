@@ -1,39 +1,39 @@
 package main
 
-import (
-	"database/sql"
-	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-)
+// import (
+// 	"database/sql"
+// 	"fmt"
+// 	_ "github.com/go-sql-driver/mysql"
+// )
 
-//MySQL数据库测试
-func main() {
-	db, err := sql.Open("mysql", "root:chinawlx@/movie")
-	if err != nil {
-		fmt.Println("数据库连接失败.....")
-	}
+// //MySQL数据库测试
+// func main() {
+// 	db, err := sql.Open("mysql", "root:chinawlx@/movie")
+// 	if err != nil {
+// 		fmt.Println("数据库连接失败.....")
+// 	}
 
-	//插入数据
-	stmt, err := db.Prepare("insert info set imid=?,title=?,year=?,runtime=?,actors=?,plot=?,language=?,country=?,poster=?,type=?,sqlstr=?")
+// 	//插入数据
+// 	stmt, err := db.Prepare("insert info set imid=?,title=?,year=?,runtime=?,actors=?,plot=?,language=?,country=?,poster=?,type=?,sqlstr=?")
 
-	if err != nil {
-		fmt.Println("插入数据失败.....")
-	}
-	_, err = stmt.Exec("tt0111161", "The Shawshank Redemption", "1994", "142 min", "Tim Robbins, Morgan Freeman, Bob Gunton, William Sadler",
-		"ds",
-		"English", "USA", "https://images-na.ssl-images-amazon.com/images/M/MV5BODU4MjU4NjIwNl5BMl5BanBnXkFtZTgwMDU2MjEyMDE@._V1_SX300.jpg",
-		"movie", "sql0")
-	if err != nil {
-		fmt.Println("插入失败。。。。。", err.Error())
-	}
+// 	if err != nil {
+// 		fmt.Println("插入数据失败.....")
+// 	}
+// 	_, err = stmt.Exec("tt0111161", "The Shawshank Redemption", "1994", "142 min", "Tim Robbins, Morgan Freeman, Bob Gunton, William Sadler",
+// 		"ds",
+// 		"English", "USA", "https://images-na.ssl-images-amazon.com/images/M/MV5BODU4MjU4NjIwNl5BMl5BanBnXkFtZTgwMDU2MjEyMDE@._V1_SX300.jpg",
+// 		"movie", "sql0")
+// 	if err != nil {
+// 		fmt.Println("插入失败。。。。。", err.Error())
+// 	}
 
-	// id, err := res.LastInsertId()
-	// if err != nil {
-	// 	fmt.Println("插入失败。。。。。")
-	// }
-	// fmt.Println(id)
+// 	// id, err := res.LastInsertId()
+// 	// if err != nil {
+// 	// 	fmt.Println("插入失败。。。。。")
+// 	// }
+// 	// fmt.Println(id)
 
-}
+// }
 
 /*
 {
