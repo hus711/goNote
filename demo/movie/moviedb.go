@@ -1,10 +1,9 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
-	//"strings"
 )
 
 //结果信息
@@ -25,26 +24,24 @@ func init() {
 
 //向数据库中插入数据
 func insertData() {
-	//插入数据
-	//stmt, err := db.Prepare("insert info set imid=?,title=?,year=?,runtime=?,actors=?,plot=?,language=?,country=?,poster=?,type=?")
-
-	db.Table("info").Create(&movieMsg)
-	// 	"imid=?,title=?,year=?,runtime=?,actors=?,plot=?,language=?,country=?,poster=?,type=?",
-	// 	msg.ImdbID,msg.Title,msg.Year,msg.Runtime,msg.Actors,msg.Plot,msg.Language,msg.Country,msg.Poster,msg.Type
-	// )
+	msg := findMsg(movieMsg.ImdbID)
+	if msg.ImdbID != "" {
+		fmt.Println(msg.Title, "已存在")
+	} else {
+		db.Table("info").Create(&movieMsg)
+	}
 }
 
 //根据新信息的id查询是否存在
 func findMsg(id string) MSG {
 	var msg MSG
-	db.Find(&msg, "imid=?", id)
+	db.Table("info").Find(&msg, "imid=?", id)
 	return msg
 }
 
 //查找所有的信息
 func FindAllMsg() []Result {
 	msgs := make([]Result, 100)
-
 	db.Table("info").Select("title,year,imid").Scan(&msgs)
 	return msgs
 }

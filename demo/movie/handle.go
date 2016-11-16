@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/flosch/pongo2"
 	"github.com/gin-gonic/gin"
+	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -52,11 +52,11 @@ func SearchMovie(args []string) int {
 	//不存在就去下载URL中海报
 	if !isExists(POSTER_DIR + "/" + movieMsg.Title + ".jpg") {
 		fmt.Println("下载海报中。。。")
+		t, _ := os.Create(POSTER_DIR + "/" + movieMsg.Title + ".jpg")
+		defer t.Close()
 		f, err := http.Get(movieMsg.Poster)
 		check(err)
-		t, _ := os.Create(POSTER_DIR + "/" + movieMsg.Title + ".jpg")
-		check(err)
-		defer t.Close()
+		f.Body.Close()
 		b, err := ioutil.ReadAll(f.Body)
 		//复制文件数据到文件流中去
 		_, err = t.Write(b)
@@ -162,49 +162,53 @@ func ClearDbMsg(args []string) int {
 
 //开启web服务
 func StartWebServer(args []string) int {
-	//创建一个多路转接器
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", safeHandler(listHandler))
-	mux.HandleFunc("/view", safeHandler(viewHandler))
-	mux.HandleFunc("/show", safeHandler(showPictureHandler))
-	//监听本地8080端口
-	err = http.ListenAndServe(":8080", mux)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err.Error())
+	fileInfoArr, err := ioutil.ReadDir(POSTER_DIR)
+	check(err)
+	images := []string{}
+	for _, fileInfo := range fileInfoArr {
+		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
+			continue
+		}
+		images = append(images, fileInfo.Name())
 	}
 
-	// router.GET("/show", func(c *gin.Context) {
-	// 	safeHandler(showPictureHandler(c.Writer, c.Request))
-	// })
-	// router.GET("/view", func(c *gin.Context) {
-	// 	safeHandler(viewHandler(c.Writer, c.Request))
-	// })
-	// router.GET("/", func(c *gin.Context) {
-	// 	safeHandler(listHandler(c.Writer, c.Request))
-	// })
+	router.GET("/show", func(c *gin.Context) {
+		renderHtml(c.Writer, "show", images)
+	})
+	router.GET("/", func(c *gin.Context) {
+		renderHtml(c.Writer, "list", images)
+	})
 
-	// router.Run(":8080")
+	router.GET("/view", func(c *gin.Context) {
+		imageId := c.Query("id") //获取图片id
+		//拼接图片相对路径
+		imagePath := POSTER_DIR + "/" + imageId
+		fmt.Println("图片路径：" + imagePath)
+		if ok := isExists(imagePath); !ok {
+			c.String(http.StatusNotFound, "？ 海报未找到！", imageId)
+		} else {
+			//设置回复头信息
+			c.Header("Content-Type", "image")
+			data, err := ioutil.ReadFile(imagePath)
+			check(err)
+			//向服务器发送图片数据
+			c.Data(http.StatusOK, "image", data)
+		}
+	})
+	router.Run(":8080")
 
 	fmt.Println("Web服务已经开启：8080端口、.../show  .../")
 	return 0
 }
 
-//关闭Web服务
-func StopWebServer(args []string) int {
-	fmt.Println("待实现(端口无法再获取输入？)")
-	return 0
-}
-
 //保存查询到的信息到数据中去
 func SaveMsg2Db(args []string) int {
-	if movieMsg.Title == "" {
-		fmt.Println("请先搜索电影数据（mn-常见电影名称）")
+	if movieMsg.Title == "" || movieMsg.ImdbID == "" {
+		fmt.Println("请先搜索得到电影数据（mn-常见电影名称）")
 		return 0
 	} else {
-		//fmt.Println("待实现")
 		insertData()
 	}
-
 	return 0
 }
 
@@ -219,7 +223,6 @@ func GetCommandHandlers() map[string]func(args []string) int {
 		"cp":     ClearPoster,
 		"cd":     ClearDbMsg,
 		"starts": StartWebServer,
-		"stops":  StopWebServer,
 		"save":   SaveMsg2Db,
 		"mn":     MoveNameHelp,
 		"h":      Help,
@@ -255,7 +258,6 @@ Commands:
 	cp					//删除所有海报
 	cd					//删除所有数据库数据
 	starts				//开启web服务
-	stops				//关闭web服务
 	save				//保存搜索到的信息到数据库
 	mn					//常见电影名称提示
 	q					//关闭程序
@@ -266,30 +268,8 @@ Commands:
 
 func Quit(args []string) int {
 	fmt.Println("退出程序")
+	CloseDb()
 	return 1
-}
-
-//使用闭包防止程序崩溃（闭包：函数和引用环境的组成的整体，函数内部返回函数）
-func safeHandler(fn http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		//延迟执行匿名函数，在每一个业务逻辑调用完毕都会调用这个匿名函数，如果出发了panic则拦截下来
-		defer func() {
-			//使用recover来拦截错误信息
-			if e, ok := recover().(error); ok {
-				http.Error(w, e.Error(), http.StatusInternalServerError)
-
-				// 或者输出自定义的 50x 错误页面
-				// w.WriteHeader(http.StatusInternalServerError)
-				// renderHtml(w, "error", e.Error())
-
-				// logging
-				log.Println("WARN: panic fired in %v.panic - %v", fn, e)
-			}
-		}()
-
-		//执行业务逻辑
-		fn(w, r)
-	}
 }
 
 //检查是否出错，出错就panic
@@ -299,9 +279,8 @@ func check(err error) {
 	}
 }
 
-//-------------------------------------------------
 //专门用来渲染函数模板
-func renderHtml(w http.ResponseWriter, tmpl string, locals []string) {
+func renderHtml(w io.Writer, tmpl string, locals []string) {
 	tmpl += ".html"
 	//拿到对应的模板，然后渲染并且写到浏览器中去
 	err := templates[tmpl].ExecuteWriter(pongo2.Context{"items": locals}, w)
@@ -315,51 +294,4 @@ func isExists(path string) bool {
 		return true
 	}
 	return os.IsExist(err)
-}
-
-//列出所有的上传图片
-func listHandler(w http.ResponseWriter, r *http.Request) {
-	//遍历上传文件夹
-	fileInfoArr, err := ioutil.ReadDir(POSTER_DIR)
-	check(err)
-	images := []string{}
-	for _, fileInfo := range fileInfoArr {
-		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
-			continue
-		}
-		images = append(images, fileInfo.Name())
-	}
-	renderHtml(w, "list", images)
-}
-
-//显示图片
-func showPictureHandler(w http.ResponseWriter, r *http.Request) {
-	fileInfoArr, err := ioutil.ReadDir(POSTER_DIR)
-	check(err)
-	images := []string{}
-	for _, fileInfo := range fileInfoArr {
-		if ext := path.Ext(fileInfo.Name()); ext != ".jpg" {
-			continue
-		}
-		images = append(images, fileInfo.Name())
-	}
-	renderHtml(w, "show", images)
-}
-
-//查看某个图片,没有就不会显示（html中有view?id=...）
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-	//从请求中拿到id对应的信息
-	imageId := r.FormValue("id")
-	//拼接图片相对路径
-	imagePath := POSTER_DIR + "/" + imageId
-	fmt.Println("图片路径：" + imagePath)
-	if ok := isExists(imagePath); !ok {
-		http.NotFound(w, r)
-		return
-	}
-
-	//设置回复头信息
-	w.Header().Set("Content-Type", "image")
-	//向服务器发送图片数据
-	http.ServeFile(w, r, imagePath)
 }

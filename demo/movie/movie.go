@@ -6,7 +6,6 @@ import (
 	"github.com/flosch/pongo2"
 	"io/ioutil"
 	"log"
-	//"net/http"
 	"os"
 	"path"
 	"strings"
