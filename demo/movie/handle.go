@@ -56,7 +56,7 @@ func SearchMovie(args []string) int {
 		defer t.Close()
 		f, err := http.Get(movieMsg.Poster)
 		check(err)
-		f.Body.Close()
+		// defer f.Body.Close()
 		b, err := ioutil.ReadAll(f.Body)
 		//复制文件数据到文件流中去
 		_, err = t.Write(b)
